@@ -214,8 +214,10 @@ cd $HOME\Downloads
 #### One-Liner Remote Execution
 
 ```powershell
-# Download and execute in one command (use with caution)
-irm https://github.com/ravens-wing/Windows-11-Powershell-Update/releases/latest/download/Update-Windows11.ps1 | iex
+# Download first, inspect, then execute (do not pipe remote code to iex)
+irm https://github.com/LightYagami28/Windows-11-Powershell-Update/releases/latest/download/Update-Windows11.ps1 -OutFile .\Update-Windows11.ps1
+Get-Content .\Update-Windows11.ps1
+.\Update-Windows11.ps1 -WhatIf
 ```
 
 > ⚠️ **Security Note**: Always review scripts before executing them with elevated privileges.
