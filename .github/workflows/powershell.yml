@@ -31,7 +31,14 @@ jobs:
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
-          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -AllowClobber
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default
+          }
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            throw 'PSGallery is not registered; cannot install the analyzer.'
+          }
+          Install-Module -Name PSScriptAnalyzer -Repository PSGallery -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
+          Import-Module PSScriptAnalyzer -ErrorAction Stop
           $issues = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error,Warning
           $issues | Format-Table -AutoSize
           if ($issues) { exit 1 }
