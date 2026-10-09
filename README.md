@@ -222,7 +222,7 @@ Get-Content .\Update-Windows11.ps1
 
 > ⚠️ **Security Note**: Always review scripts before executing them with elevated privileges.
 
-> ⚠️ **Legacy script**: `updatew11.ps1` is retained for historical compatibility only. It elevates with `ExecutionPolicy Bypass`, stops services and clears the Windows Update cache without a `-WhatIf` safety contract. Do not use it; use `Update-Windows11.ps1` after reviewing it. Its `-WhatIf` mode does not install modules or winget, change services, clear caches, install updates, or modify Store apps; it still writes transcript/log files.
+> ⚠️ **Compatibility entry point**: `updatew11.ps1` now forwards to `Update-Windows11.ps1`; the old implementation that used `ExecutionPolicy Bypass` and deleted update-cache files was removed. Review and use the maintained script directly when possible. `-WhatIf` does not install modules or winget, change services, clear caches, install updates, or modify Store apps; it still writes transcript/log files.
 
 ---
 

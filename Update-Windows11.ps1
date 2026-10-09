@@ -76,7 +76,7 @@ Start-Transcript -Path $TranscriptPath -Append
 
 #region Helper Functions
 
-function Write-Log {
+function Write-UpdateLog {
     <#
     .SYNOPSIS
         Writes a message to the log file and console.
@@ -97,12 +97,12 @@ function Write-Log {
     # Write to log file
     Add-Content -Path $LogPath -Value $logMessage -ErrorAction SilentlyContinue
     
-    # Write to console with color
+    # Keep console messages on the information/warning streams.
     switch ($Level) {
-        'Info'    { Write-Host $Message -ForegroundColor Cyan }
+        'Info'    { Write-Information -MessageData $Message -InformationAction Continue }
         'Warning' { Write-Warning $Message }
-        'Error'   { Write-Error $Message }
-        'Success' { Write-Host $Message -ForegroundColor Green }
+        'Error'   { Write-Information -MessageData "ERROR: $Message" -InformationAction Continue }
+        'Success' { Write-Information -MessageData $Message -InformationAction Continue }
     }
 }
 
@@ -128,7 +128,7 @@ function Invoke-SafeCommand {
         return $true
     }
     catch {
-        Write-Log -Message "$ErrorMessage : $($_.Exception.Message)" -Level Error
+        Write-UpdateLog -Message "$ErrorMessage : $($_.Exception.Message)" -Level Error
         if (-not $ContinueOnError) {
             throw
         }
@@ -160,7 +160,7 @@ function New-SystemRestorePoint {
     
     if ($PSCmdlet.ShouldProcess("System", "Create restore point")) {
         try {
-            Write-Log -Message "Creating system restore point..." -Level Info
+            Write-UpdateLog -Message "Creating system restore point..." -Level Info
             
             # Enable System Restore if not enabled
             Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
@@ -168,11 +168,11 @@ function New-SystemRestorePoint {
             # Create restore point
             Checkpoint-Computer -Description "Before Windows 11 Update - $(Get-Date -Format 'yyyy-MM-dd HH:mm')" -RestorePointType MODIFY_SETTINGS
             
-            Write-Log -Message "System restore point created successfully." -Level Success
+            Write-UpdateLog -Message "System restore point created successfully." -Level Success
             return $true
         }
         catch {
-            Write-Log -Message "Failed to create system restore point: $($_.Exception.Message)" -Level Warning
+            Write-UpdateLog -Message "Failed to create system restore point: $($_.Exception.Message)" -Level Warning
             return $false
         }
     }
@@ -199,35 +199,35 @@ function Set-ServiceState {
             $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             
             if (-not $service) {
-                Write-Log -Message "Service '$serviceName' not found. Skipping." -Level Warning
+                Write-UpdateLog -Message "Service '$serviceName' not found. Skipping." -Level Warning
                 continue
             }
             
             if ($PSCmdlet.ShouldProcess($serviceName, $Action)) {
-                Write-Log -Message "${Action}ping service: $serviceName" -Level Info
+                Write-UpdateLog -Message "${Action}ping service: $serviceName" -Level Info
                 
                 switch ($Action) {
                     'Stop' {
                         if ($service.Status -ne 'Stopped') {
                             Stop-Service -Name $serviceName -Force -ErrorAction Stop
-                            Write-Log -Message "Service '$serviceName' stopped successfully." -Level Success
+                            Write-UpdateLog -Message "Service '$serviceName' stopped successfully." -Level Success
                         }
                     }
                     'Start' {
                         if ($service.Status -ne 'Running') {
                             Start-Service -Name $serviceName -ErrorAction Stop
-                            Write-Log -Message "Service '$serviceName' started successfully." -Level Success
+                            Write-UpdateLog -Message "Service '$serviceName' started successfully." -Level Success
                         }
                     }
                     'Restart' {
                         Restart-Service -Name $serviceName -Force -ErrorAction Stop
-                        Write-Log -Message "Service '$serviceName' restarted successfully." -Level Success
+                        Write-UpdateLog -Message "Service '$serviceName' restarted successfully." -Level Success
                     }
                 }
             }
         }
         catch {
-            Write-Log -Message "Failed to $Action service '$serviceName': $($_.Exception.Message)" -Level Error
+            Write-UpdateLog -Message "Failed to $Action service '$serviceName': $($_.Exception.Message)" -Level Error
         }
     }
 }
@@ -242,7 +242,7 @@ function Clear-WindowsUpdateCache {
     
     if ($PSCmdlet.ShouldProcess("Windows Update Cache", "Clear")) {
         try {
-            Write-Log -Message "Cleaning Windows Update cache..." -Level Info
+            Write-UpdateLog -Message "Cleaning Windows Update cache..." -Level Info
             
             $cachePaths = @(
                 "$env:SystemRoot\SoftwareDistribution\Download"
@@ -256,11 +256,11 @@ function Clear-WindowsUpdateCache {
                 }
             }
             
-            Write-Log -Message "Windows Update cache cleaned successfully." -Level Success
+            Write-UpdateLog -Message "Windows Update cache cleaned successfully." -Level Success
             return $true
         }
         catch {
-            Write-Log -Message "Failed to clean Windows Update cache: $($_.Exception.Message)" -Level Warning
+            Write-UpdateLog -Message "Failed to clean Windows Update cache: $($_.Exception.Message)" -Level Warning
             return $false
         }
     }
@@ -279,7 +279,7 @@ function Install-RequiredModule {
     
     try {
         if (-not (Get-Module -ListAvailable -Name $ModuleName)) {
-            Write-Log -Message "Installing module: $ModuleName" -Level Info
+            Write-UpdateLog -Message "Installing module: $ModuleName" -Level Info
 
             if (-not $PSCmdlet.ShouldProcess("PowerShell Gallery module '$ModuleName'", 'Install')) {
                 return $false
@@ -289,15 +289,15 @@ function Install-RequiredModule {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             
             Install-Module -Name $ModuleName -Force -Scope CurrentUser -AllowClobber -ErrorAction Stop
-            Write-Log -Message "Module '$ModuleName' installed successfully." -Level Success
+            Write-UpdateLog -Message "Module '$ModuleName' installed successfully." -Level Success
         }
         
         Import-Module -Name $ModuleName -ErrorAction Stop
-        Write-Log -Message "Module '$ModuleName' imported successfully." -Level Success
+        Write-UpdateLog -Message "Module '$ModuleName' imported successfully." -Level Success
         return $true
     }
     catch {
-        Write-Log -Message "Failed to install/import module '$ModuleName': $($_.Exception.Message)" -Level Error
+        Write-UpdateLog -Message "Failed to install/import module '$ModuleName': $($_.Exception.Message)" -Level Error
         return $false
     }
 }
@@ -312,11 +312,11 @@ function Test-WingetInstallation {
     param()
     
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Log -Message "Winget is already installed." -Level Info
+        Write-UpdateLog -Message "Winget is already installed." -Level Info
         return $true
     }
     
-    Write-Log -Message "Winget not found. Attempting installation..." -Level Warning
+    Write-UpdateLog -Message "Winget not found. Attempting installation..." -Level Warning
 
     if (-not $PSCmdlet.ShouldProcess('Windows Package Manager', 'Download and install winget')) {
         return $false
@@ -329,19 +329,19 @@ function Test-WingetInstallation {
         $tempPath = Join-Path $env:TEMP "AppInstaller.msixbundle"
         $uri = "https://aka.ms/getwinget"
         
-        Write-Log -Message "Downloading winget installer from: $uri" -Level Info
+        Write-UpdateLog -Message "Downloading winget installer from: $uri" -Level Info
         Invoke-WebRequest -Uri $uri -OutFile $tempPath -UseBasicParsing -ErrorAction Stop
         
-        Write-Log -Message "Installing winget..." -Level Info
+        Write-UpdateLog -Message "Installing winget..." -Level Info
         Add-AppxPackage -Path $tempPath -ErrorAction Stop
         
         Remove-Item -Path $tempPath -Force -ErrorAction SilentlyContinue
         
-        Write-Log -Message "Winget installed successfully." -Level Success
+        Write-UpdateLog -Message "Winget installed successfully." -Level Success
         return $true
     }
     catch {
-        Write-Log -Message "Failed to install winget: $($_.Exception.Message)" -Level Error
+        Write-UpdateLog -Message "Failed to install winget: $($_.Exception.Message)" -Level Error
         return $false
     }
 }
@@ -359,30 +359,30 @@ function Update-WindowsOS {
     param()
     
     if ($SkipWindowsUpdate) {
-        Write-Log -Message "Skipping Windows Update (parameter specified)." -Level Info
+        Write-UpdateLog -Message "Skipping Windows Update (parameter specified)." -Level Info
         return
     }
     
-    Write-Log -Message "Starting Windows Update process..." -Level Info
+    Write-UpdateLog -Message "Starting Windows Update process..." -Level Info
     
     # Install PSWindowsUpdate module
     if (-not (Install-RequiredModule -ModuleName 'PSWindowsUpdate' -WhatIf:$WhatIfPreference)) {
-        Write-Log -Message "Cannot proceed with Windows Update without PSWindowsUpdate module." -Level Error
+        Write-UpdateLog -Message "Cannot proceed with Windows Update without PSWindowsUpdate module." -Level Error
         return
     }
     
     if ($PSCmdlet.ShouldProcess("Windows 11", "Install Updates")) {
         try {
             # Get available updates
-            Write-Log -Message "Checking for available Windows updates..." -Level Info
+            Write-UpdateLog -Message "Checking for available Windows updates..." -Level Info
             $updates = Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -ErrorAction Stop
             
             if ($updates.Count -eq 0) {
-                Write-Log -Message "No Windows updates available." -Level Success
+                Write-UpdateLog -Message "No Windows updates available." -Level Success
                 return
             }
             
-            Write-Log -Message "Found $($updates.Count) update(s) to install." -Level Info
+            Write-UpdateLog -Message "Found $($updates.Count) update(s) to install." -Level Info
             
             # Install updates
             $currentUpdate = 0
@@ -391,32 +391,32 @@ function Update-WindowsOS {
                 $percentComplete = [math]::Round(($currentUpdate / $updates.Count) * 100)
                 
                 Write-Progress -Activity "Installing Windows Updates" -Status "$currentUpdate of $($updates.Count): $($update.Title)" -PercentComplete $percentComplete
-                Write-Log -Message "Installing update ($currentUpdate/$($updates.Count)): $($update.Title)" -Level Info
+                Write-UpdateLog -Message "Installing update ($currentUpdate/$($updates.Count)): $($update.Title)" -Level Info
                 
                 try {
                     Install-WindowsUpdate -KBArticleID $update.KBArticleID -AcceptAll -IgnoreReboot -ErrorAction Stop
-                    Write-Log -Message "Successfully installed: $($update.Title)" -Level Success
+                    Write-UpdateLog -Message "Successfully installed: $($update.Title)" -Level Success
                 }
                 catch {
-                    Write-Log -Message "Failed to install update '$($update.Title)': $($_.Exception.Message)" -Level Error
+                    Write-UpdateLog -Message "Failed to install update '$($update.Title)': $($_.Exception.Message)" -Level Error
                 }
             }
             
             Write-Progress -Activity "Installing Windows Updates" -Completed
-            Write-Log -Message "Windows Update process completed." -Level Success
+            Write-UpdateLog -Message "Windows Update process completed." -Level Success
             
             # Check if reboot is required
             if (Get-WURebootStatus -Silent) {
-                Write-Log -Message "System reboot is required to complete Windows updates." -Level Warning
+                Write-UpdateLog -Message "System reboot is required to complete Windows updates." -Level Warning
             }
         }
         catch {
-            Write-Log -Message "Windows Update process failed: $($_.Exception.Message)" -Level Error
+            Write-UpdateLog -Message "Windows Update process failed: $($_.Exception.Message)" -Level Error
         }
     }
 }
 
-function Update-WingetApplications {
+function Update-WingetApplication {
     <#
     .SYNOPSIS
         Updates applications managed by winget.
@@ -425,38 +425,38 @@ function Update-WingetApplications {
     param()
     
     if ($SkipWingetUpdate) {
-        Write-Log -Message "Skipping winget updates (parameter specified)." -Level Info
+        Write-UpdateLog -Message "Skipping winget updates (parameter specified)." -Level Info
         return
     }
     
-    Write-Log -Message "Starting winget application updates..." -Level Info
+    Write-UpdateLog -Message "Starting winget application updates..." -Level Info
     
     if (-not (Test-WingetInstallation -WhatIf:$WhatIfPreference)) {
-        Write-Log -Message "Cannot proceed with winget updates." -Level Error
+        Write-UpdateLog -Message "Cannot proceed with winget updates." -Level Error
         return
     }
     
     if ($PSCmdlet.ShouldProcess("Winget Applications", "Update All")) {
         try {
-            Write-Log -Message "Updating all winget applications..." -Level Info
+            Write-UpdateLog -Message "Updating all winget applications..." -Level Info
             
             # Execute winget upgrade
             $upgradeOutput = winget upgrade --all --accept-source-agreements --accept-package-agreements --silent 2>&1
             
             if ($LASTEXITCODE -eq 0) {
-                Write-Log -Message "Winget applications updated successfully." -Level Success
+                Write-UpdateLog -Message "Winget applications updated successfully." -Level Success
             }
             else {
-                Write-Log -Message "Winget upgrade completed with warnings. Output: $($upgradeOutput -join "`n")" -Level Warning
+                Write-UpdateLog -Message "Winget upgrade completed with warnings. Output: $($upgradeOutput -join "`n")" -Level Warning
             }
         }
         catch {
-            Write-Log -Message "Failed to update winget applications: $($_.Exception.Message)" -Level Error
+            Write-UpdateLog -Message "Failed to update winget applications: $($_.Exception.Message)" -Level Error
         }
     }
 }
 
-function Update-StoreApplications {
+function Update-StoreApplication {
     <#
     .SYNOPSIS
         Updates Microsoft Store applications.
@@ -465,11 +465,11 @@ function Update-StoreApplications {
     param()
     
     if ($SkipStoreUpdate) {
-        Write-Log -Message "Skipping Microsoft Store updates (parameter specified)." -Level Info
+        Write-UpdateLog -Message "Skipping Microsoft Store updates (parameter specified)." -Level Info
         return
     }
     
-    Write-Log -Message "Starting Microsoft Store application updates..." -Level Info
+    Write-UpdateLog -Message "Starting Microsoft Store application updates..." -Level Info
     
     if ($PSCmdlet.ShouldProcess("Microsoft Store Applications", "Update All")) {
         try {
@@ -477,11 +477,11 @@ function Update-StoreApplications {
             $apps = Get-AppxPackage -AllUsers | Where-Object { $_.InstallLocation -and (Test-Path "$($_.InstallLocation)\AppxManifest.xml") }
             
             if ($apps.Count -eq 0) {
-                Write-Log -Message "No Microsoft Store apps found to update." -Level Info
+                Write-UpdateLog -Message "No Microsoft Store apps found to update." -Level Info
                 return
             }
             
-            Write-Log -Message "Found $($apps.Count) Microsoft Store app(s) to process." -Level Info
+            Write-UpdateLog -Message "Found $($apps.Count) Microsoft Store app(s) to process." -Level Info
             
             $currentApp = 0
             $successCount = 0
@@ -504,15 +504,15 @@ function Update-StoreApplications {
                 }
                 catch {
                     $failCount++
-                    Write-Log -Message "Failed to update '$($app.Name)': $($_.Exception.Message)" -Level Warning
+                    Write-UpdateLog -Message "Failed to update '$($app.Name)': $($_.Exception.Message)" -Level Warning
                 }
             }
             
             Write-Progress -Activity "Updating Microsoft Store Applications" -Completed
-            Write-Log -Message "Microsoft Store app updates completed. Success: $successCount, Failed: $failCount" -Level Success
+            Write-UpdateLog -Message "Microsoft Store app updates completed. Success: $successCount, Failed: $failCount" -Level Success
         }
         catch {
-            Write-Log -Message "Failed to update Microsoft Store applications: $($_.Exception.Message)" -Level Error
+            Write-UpdateLog -Message "Failed to update Microsoft Store applications: $($_.Exception.Message)" -Level Error
         }
     }
 }
@@ -522,15 +522,15 @@ function Update-StoreApplications {
 #region Main Script Execution
 
 try {
-    Write-Log -Message "========================================" -Level Info
-    Write-Log -Message "Windows 11 Update Script Started" -Level Info
-    Write-Log -Message "========================================" -Level Info
-    Write-Log -Message "Log file: $LogPath" -Level Info
-    Write-Log -Message "Transcript: $TranscriptPath" -Level Info
+    Write-UpdateLog -Message "========================================" -Level Info
+    Write-UpdateLog -Message "Windows 11 Update Script Started" -Level Info
+    Write-UpdateLog -Message "========================================" -Level Info
+    Write-UpdateLog -Message "Log file: $LogPath" -Level Info
+    Write-UpdateLog -Message "Transcript: $TranscriptPath" -Level Info
     
     # Verify administrator privileges
     if (-not (Test-Administrator)) {
-        Write-Log -Message "This script requires administrator privileges. Please run as Administrator." -Level Error
+        Write-UpdateLog -Message "This script requires administrator privileges. Please run as Administrator." -Level Error
         exit 1
     }
     
@@ -543,48 +543,48 @@ try {
     $updateServices = @('wuauserv', 'bits', 'cryptsvc', 'appidsvc')
     
     # Stop services
-    Write-Log -Message "Stopping Windows Update services..." -Level Info
+    Write-UpdateLog -Message "Stopping Windows Update services..." -Level Info
     Set-ServiceState -ServiceNames $updateServices -Action Stop -WhatIf:$WhatIfPreference
     
     # Clear Windows Update cache
     Clear-WindowsUpdateCache -WhatIf:$WhatIfPreference
     
     # Restart Windows Update service
-    Write-Log -Message "Restarting Windows Update service..." -Level Info
+    Write-UpdateLog -Message "Restarting Windows Update service..." -Level Info
     Set-ServiceState -ServiceNames @('wuauserv') -Action Start -WhatIf:$WhatIfPreference
     
     # Execute updates
     Update-WindowsOS -WhatIf:$WhatIfPreference
-    Update-WingetApplications -WhatIf:$WhatIfPreference
-    Update-StoreApplications -WhatIf:$WhatIfPreference
+    Update-WingetApplication -WhatIf:$WhatIfPreference
+    Update-StoreApplication -WhatIf:$WhatIfPreference
     
     # Restart all services
-    Write-Log -Message "Starting Windows Update services..." -Level Info
+    Write-UpdateLog -Message "Starting Windows Update services..." -Level Info
     Set-ServiceState -ServiceNames $updateServices -Action Start -WhatIf:$WhatIfPreference
     
-    Write-Log -Message "========================================" -Level Info
-    Write-Log -Message "All update processes completed!" -Level Success
-    Write-Log -Message "========================================" -Level Info
+    Write-UpdateLog -Message "========================================" -Level Info
+    Write-UpdateLog -Message "All update processes completed!" -Level Success
+    Write-UpdateLog -Message "========================================" -Level Info
     
     # Check for required reboot
     if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired") {
-        Write-Log -Message "IMPORTANT: A system reboot is required to complete the updates." -Level Warning
+        Write-UpdateLog -Message "IMPORTANT: A system reboot is required to complete the updates." -Level Warning
         
         $response = Read-Host "Would you like to reboot now? (Y/N)"
         if ($response -eq 'Y' -or $response -eq 'y') {
-            Write-Log -Message "Initiating system reboot..." -Level Info
+            Write-UpdateLog -Message "Initiating system reboot..." -Level Info
             Stop-Transcript
             Restart-Computer -Force
         }
     }
 }
 catch {
-    Write-Log -Message "Critical error occurred: $($_.Exception.Message)" -Level Error
-    Write-Log -Message "Stack trace: $($_.ScriptStackTrace)" -Level Error
+    Write-UpdateLog -Message "Critical error occurred: $($_.Exception.Message)" -Level Error
+    Write-UpdateLog -Message "Stack trace: $($_.ScriptStackTrace)" -Level Error
     exit 1
 }
 finally {
-    Write-Log -Message "Script execution ended at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -Level Info
+    Write-UpdateLog -Message "Script execution ended at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -Level Info
     Stop-Transcript
 }
 
