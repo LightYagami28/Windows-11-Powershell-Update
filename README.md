@@ -5,7 +5,7 @@
 [![PowerShell](https://img.shields.io/badge/PowerShell-7.0+-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011-0078D6.svg)](https://www.microsoft.com/windows)
-[![Code Quality](https://img.shields.io/badge/Code%20Quality-A+-success.svg)](./PSScriptAnalyzer-Report.md)
+[![PowerShell validation](https://github.com/LightYagami28/Windows-11-Powershell-Update/actions/workflows/powershell.yml/badge.svg)](https://github.com/LightYagami28/Windows-11-Powershell-Update/actions/workflows/powershell.yml)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/ravens-wing/Windows-11-Powershell-Update/graphs/commit-activity)
 
 **A robust, production-ready PowerShell solution for comprehensive Windows 11 system updates, designed to work when native Windows Update fails.**
@@ -221,6 +221,8 @@ Get-Content .\Update-Windows11.ps1
 ```
 
 > ⚠️ **Security Note**: Always review scripts before executing them with elevated privileges.
+
+> ⚠️ **Legacy script**: `updatew11.ps1` is retained for historical compatibility only. It elevates with `ExecutionPolicy Bypass`, stops services and clears the Windows Update cache without a `-WhatIf` safety contract. Do not use it; use `Update-Windows11.ps1` after reviewing it. Its `-WhatIf` mode does not install modules or winget, change services, clear caches, install updates, or modify Store apps; it still writes transcript/log files.
 
 ---
 
@@ -854,11 +856,8 @@ Marcy J Cook
 
 ### Resources
 
-- 📖 [Complete Documentation](./docs/)
-- 📊 [Code Quality Report](./PSScriptAnalyzer-Report.md)
-- 📋 [Comparison Analysis](./COMPARISON.md)
-- 🔄 [Improvement Summary](./IMPROVEMENTS.md)
-- 📝 [Changelog](./CHANGELOG.md)
+- [Security policy](./SECURITY.md)
+- [PowerShell validation workflow](./.github/workflows/powershell.yml)
 
 ---
 

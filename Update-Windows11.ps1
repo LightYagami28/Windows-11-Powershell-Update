@@ -271,7 +271,7 @@ function Install-RequiredModule {
     .SYNOPSIS
         Installs and imports required PowerShell modules.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [Parameter(Mandatory = $true)]
         [string]$ModuleName
@@ -280,6 +280,10 @@ function Install-RequiredModule {
     try {
         if (-not (Get-Module -ListAvailable -Name $ModuleName)) {
             Write-Log -Message "Installing module: $ModuleName" -Level Info
+
+            if (-not $PSCmdlet.ShouldProcess("PowerShell Gallery module '$ModuleName'", 'Install')) {
+                return $false
+            }
             
             # Set TLS 1.2 for secure communication
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -303,7 +307,7 @@ function Test-WingetInstallation {
     .SYNOPSIS
         Checks if winget is installed and installs if necessary.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     [OutputType([bool])]
     param()
     
@@ -313,6 +317,10 @@ function Test-WingetInstallation {
     }
     
     Write-Log -Message "Winget not found. Attempting installation..." -Level Warning
+
+    if (-not $PSCmdlet.ShouldProcess('Windows Package Manager', 'Download and install winget')) {
+        return $false
+    }
     
     try {
         # Set TLS 1.2
@@ -358,7 +366,7 @@ function Update-WindowsOS {
     Write-Log -Message "Starting Windows Update process..." -Level Info
     
     # Install PSWindowsUpdate module
-    if (-not (Install-RequiredModule -ModuleName 'PSWindowsUpdate')) {
+    if (-not (Install-RequiredModule -ModuleName 'PSWindowsUpdate' -WhatIf:$WhatIfPreference)) {
         Write-Log -Message "Cannot proceed with Windows Update without PSWindowsUpdate module." -Level Error
         return
     }
@@ -423,7 +431,7 @@ function Update-WingetApplications {
     
     Write-Log -Message "Starting winget application updates..." -Level Info
     
-    if (-not (Test-WingetInstallation)) {
+    if (-not (Test-WingetInstallation -WhatIf:$WhatIfPreference)) {
         Write-Log -Message "Cannot proceed with winget updates." -Level Error
         return
     }
@@ -528,7 +536,7 @@ try {
     
     # Create system restore point if requested
     if ($CreateRestorePoint) {
-        New-SystemRestorePoint
+        New-SystemRestorePoint -WhatIf:$WhatIfPreference
     }
     
     # Define Windows Update services
@@ -536,23 +544,23 @@ try {
     
     # Stop services
     Write-Log -Message "Stopping Windows Update services..." -Level Info
-    Set-ServiceState -ServiceNames $updateServices -Action Stop
+    Set-ServiceState -ServiceNames $updateServices -Action Stop -WhatIf:$WhatIfPreference
     
     # Clear Windows Update cache
-    Clear-WindowsUpdateCache
+    Clear-WindowsUpdateCache -WhatIf:$WhatIfPreference
     
     # Restart Windows Update service
     Write-Log -Message "Restarting Windows Update service..." -Level Info
-    Set-ServiceState -ServiceNames @('wuauserv') -Action Start
+    Set-ServiceState -ServiceNames @('wuauserv') -Action Start -WhatIf:$WhatIfPreference
     
     # Execute updates
-    Update-WindowsOS
-    Update-WingetApplications
-    Update-StoreApplications
+    Update-WindowsOS -WhatIf:$WhatIfPreference
+    Update-WingetApplications -WhatIf:$WhatIfPreference
+    Update-StoreApplications -WhatIf:$WhatIfPreference
     
     # Restart all services
     Write-Log -Message "Starting Windows Update services..." -Level Info
-    Set-ServiceState -ServiceNames $updateServices -Action Start
+    Set-ServiceState -ServiceNames $updateServices -Action Start -WhatIf:$WhatIfPreference
     
     Write-Log -Message "========================================" -Level Info
     Write-Log -Message "All update processes completed!" -Level Success
